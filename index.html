@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIM Tickets</title>
+  <style>
+    :root {
+      --bg: #252526;
+      --row: #2b2b2d;
+      --row-alt: #262628;
+      --header: #3a3a3c;
+      --line: #3a3a3c;
+      --text: #ffffff;
+      --muted: #9a9a9a;
+      --legend: #d0d0d0;
+      --green: #2ea043;
+      --green-fill: #1e3a24;
+      --green-text: #7ee787;
+      --yellow: #d9a441;
+      --yellow-fill: #3d3416;
+      --yellow-text: #ffd866;
+      --red: #e5484d;
+      --red-fill: #3d1c1e;
+      --red-text: #ff8a8f;
+      --orange: #e08a2e;
+      --orange-fill: #3a2c12;
+      --orange-text: #f0a634;
+      --orange-dot: #e0a34a;
+      --blue: #3d8fd4;
+      --blue-fill: #1e3550;
+      --blue-text: #9fd0f5;
+      --blue-dot: #5aa9e6;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .page {
+      padding: 14px 16px 28px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+
+    .toolbar button,
+    .toolbar a {
+      font: inherit;
+      font-size: 12px;
+      color: #e8e8e8;
+      background: #2b2b2d;
+      border: 1px solid #4a4a4c;
+      border-radius: 999px;
+      padding: 5px 12px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .toolbar button:hover,
+    .toolbar a:hover {
+      background: #3a3a3c;
+    }
+
+    .toolbar button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .toolbar button:focus-visible,
+    .toolbar a:focus-visible {
+      outline: 2px solid var(--blue-dot);
+      outline-offset: 2px;
+    }
+
+    .status {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #4a4a4c;
+      background: #2b2b2d;
+      color: var(--legend);
+    }
+
+    .status.error {
+      border-color: var(--red);
+      background: var(--red-fill);
+      color: var(--red-text);
+    }
+
+    .board h1 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .asof {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .stat,
+    .age-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 3px 0;
+      color: var(--legend);
+    }
+
+    .age-label {
+      margin: 8px 0 3px;
+      color: var(--legend);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .dot.rme { background: var(--orange-dot); }
+    .dot.vendor { background: var(--blue-dot); }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex: 0 0 auto;
+    }
+
+    .swatch.green { background: var(--green); }
+    .swatch.yellow { background: var(--yellow); }
+    .swatch.red { background: var(--red); }
+
+    .table-wrap {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      background: var(--row);
+    }
+
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: middle;
+      font-weight: 400;
+    }
+
+    thead th {
+      background: var(--header);
+      color: #fff;
+      font-weight: 700;
+      border-bottom: 1px solid #4a4a4c;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      border-bottom: 1px solid var(--line);
+    }
+
+    tbody tr:nth-child(odd) td { background: var(--row); }
+    tbody tr:nth-child(even) td { background: var(--row-alt); }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    td.num, th.num { white-space: nowrap; width: 1%; }
+    td.sev, th.sev,
+    td.created, th.created,
+    td.days, th.days,
+    td.type, th.type { white-space: nowrap; width: 1%; }
+
+    .x {
+      color: #8d8d8d;
+      margin-left: 8px;
+    }
+
+    .pill {
+      display: inline-block;
+      min-width: 1.5em;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+    }
+
+    .pill.green { background: var(--green-fill); color: var(--green-text); border-color: var(--green); }
+    .pill.yellow { background: var(--yellow-fill); color: var(--yellow-text); border-color: var(--yellow); }
+    .pill.red { background: var(--red-fill); color: var(--red-text); border-color: var(--red); }
+    .pill.orange { background: var(--orange-fill); color: var(--orange-text); border-color: var(--orange); }
+    .pill.blue { background: var(--blue-fill); color: var(--blue-text); border-color: var(--blue); }
+    .pill.neutral { background: #2a2a2c; color: var(--legend); border-color: #6e6e70; }
+
+    .empty {
+      margin-top: 14px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="toolbar">
+      <button type="button" id="refresh">Refresh</button>
+      <button type="button" id="download-png">Download PNG</button>
+      <button type="button" id="download-csv">Download CSV</button>
+      <a id="edit-link" href="https://docs.google.com/spreadsheets/d/1kvsV3ZFlnPIuvfLm5mzaZ075P8FxsYYxiP4vI37muYg/edit" target="_blank" rel="noopener noreferrer">Edit in Google Sheets</a>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite">Loading tickets…</p>
+    <div id="board"></div>
+  </div>
+  <noscript>This dashboard needs JavaScript to load tickets from Google Sheets.</noscript>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script>
+    const SHEET_CSV = "https://docs.google.com/spreadsheets/d/1kvsV3ZFlnPIuvfLm5mzaZ075P8FxsYYxiP4vI37muYg/gviz/tq?tqx=out:csv&sheet=Tracker&range=A12:F212";
+    const MONTHS = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+
+    const state = { tickets: [], asOf: "" };
+
+    function parseCSV(text) {
+      if (text && text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+      const rows = [];
+      let row = [];
+      let field = "";
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (text[i + 1] === '"') {
+              field += '"';
+              i++;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            field += c;
+          }
+          continue;
+        }
+        if (c === '"') {
+          inQuotes = true;
+          continue;
+        }
+        if (c === ",") {
+          row.push(field);
+          field = "";
+          continue;
+        }
+        if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(field);
+          if (!(row.length === 1 && row[0] === "")) rows.push(row);
+          row = [];
+          field = "";
+          continue;
+        }
+        field += c;
+      }
+      if (field.length || row.length) {
+        row.push(field);
+        if (!(row.length === 1 && row[0] === "")) rows.push(row);
+      }
+      return rows;
+    }
+
+    function validDate(y, m, d) {
+      const dt = new Date(y, m, d);
+      return dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d ? dt : null;
+    }
+
+    function parseCreated(raw) {
+      if (raw == null) return null;
+      const s = String(raw).trim();
+      if (!s) return null;
+
+      let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s].*)?$/);
+      if (m) return validDate(+m[1], +m[2] - 1, +m[3]);
+
+      m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?:[T\s].*)?$/);
+      if (m) {
+        let y = +m[3];
+        if (y < 100) y += y >= 70 ? 1900 : 2000;
+        return validDate(y, +m[1] - 1, +m[2]);
+      }
+
+      m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+      if (m) {
+        const mo = MONTHS[m[1].slice(0, 3).toLowerCase()];
+        if (mo != null) return validDate(+m[3], mo, +m[2]);
+      }
+
+      m = s.match(/^(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})$/);
+      if (m) {
+        const mo = MONTHS[m[2].slice(0, 3).toLowerCase()];
+        if (mo != null) return validDate(+m[3], mo, +m[1]);
+      }
+
+      if (/^\d{5}(\.\d+)?$/.test(s)) {
+        const serial = Number(s);
+        if (serial >= 20000 && serial <= 80000) {
+          const utc = new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000);
+          return validDate(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+        }
+      }
+      return null;
+    }
+
+    function parseDays(raw) {
+      if (raw == null) return null;
+      const s = String(raw).trim().replace(/,/g, "");
+      if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+      const n = Number(s);
+      return Number.isFinite(n) ? Math.round(n) : null;
+    }
+
+    function startOfDay(d) {
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+
+    function daysBetween(created, today) {
+      const ms = startOfDay(today).getTime() - startOfDay(created).getTime();
+      return Math.round(ms / 86400000);
+    }
+
+    function formatISODate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return y + "-" + m + "-" + day;
+    }
+
+    function headerIndex(header, names) {
+      for (let i = 0; i < header.length; i++) {
+        if (names.indexOf(header[i]) !== -1) return i;
+      }
+      return -1;
+    }
+
+    function rowsToTickets(rows, today) {
+      if (!rows.length) return [];
+      const header = rows[0].map(function (h) {
+        return String(h || "").trim().toLowerCase().replace(/\s+/g, " ");
+      });
+      const idx = {
+        title: headerIndex(header, ["title"]),
+        severity: headerIndex(header, ["severity"]),
+        created: headerIndex(header, ["created", "date created", "created date"]),
+        days: headerIndex(header, ["days open", "days"]),
+        type: headerIndex(header, ["type"])
+      };
+      let start = 1;
+      if (idx.title === -1) {
+        idx.title = 1;
+        idx.severity = idx.severity === -1 ? 2 : idx.severity;
+        idx.created = idx.created === -1 ? 3 : idx.created;
+        idx.days = idx.days === -1 ? 4 : idx.days;
+        idx.type = idx.type === -1 ? 5 : idx.type;
+        start = 0;
+      }
+      const tickets = [];
+      for (let i = start; i < rows.length; i++) {
+        const r = rows[i];
+        const title = String(r[idx.title] == null ? "" : r[idx.title]).trim();
+        if (!title) continue;
+        const createdRaw = String(r[idx.created] == null ? "" : r[idx.created]).trim();
+        const created = parseCreated(createdRaw);
+        const fallbackDays = parseDays(r[idx.days]);
+        const daysOpen = created ? daysBetween(created, today) : fallbackDays;
+        tickets.push({
+          title: title,
+          severity: String(r[idx.severity] == null ? "" : r[idx.severity]).trim(),
+          createdRaw: createdRaw,
+          created: created,
+          daysOpen: daysOpen,
+          type: String(r[idx.type] == null ? "" : r[idx.type]).trim(),
+          order: i
+        });
+      }
+      tickets.sort(function (a, b) {
+        const ka = sortKey(a, today);
+        const kb = sortKey(b, today);
+        if (ka !== kb) return ka - kb;
+        return a.order - b.order;
+      });
+      return tickets;
+    }
+
+    function sortKey(ticket, today) {
+      if (ticket.created) return startOfDay(ticket.created).getTime();
+      if (typeof ticket.daysOpen === "number") {
+        return startOfDay(today).getTime() - ticket.daysOpen * 86400000;
+      }
+      return Number.POSITIVE_INFINITY;
+    }
+
+    function severityClass(severity) {
+      const n = Number(String(severity).trim());
+      if (!Number.isFinite(n)) return "neutral";
+      if (n === 5) return "green";
+      if (n === 4) return "orange";
+      if (n <= 3) return "red";
+      return "neutral";
+    }
+
+    function ageClass(days) {
+      if (typeof days !== "number") return "neutral";
+      if (days <= 30) return "green";
+      if (days <= 59) return "yellow";
+      return "red";
+    }
+
+    function typeClass(type) {
+      const t = String(type || "").trim().toLowerCase();
+      if (t === "rme") return "orange";
+      if (t === "vendor") return "blue";
+      return "neutral";
+    }
+
+    function typeKind(type) {
+      const t = String(type || "").trim().toLowerCase();
+      if (t === "rme") return "rme";
+      if (t === "vendor") return "vendor";
+      return "other";
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function escapeCsv(s) {
+      const v = s == null ? "" : String(s);
+      if (/[",\r\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
+      return v;
+    }
+
+    function createdLabel(ticket) {
+      return ticket.created ? formatISODate(ticket.created) : (ticket.createdRaw || "—");
+    }
+
+    function daysLabel(ticket) {
+      return typeof ticket.daysOpen === "number" ? String(ticket.daysOpen) : "—";
+    }
+
+    function render(tickets, asOf) {
+      const rme = tickets.filter(function (t) { return typeKind(t.type) === "rme"; }).length;
+      const vendor = tickets.filter(function (t) { return typeKind(t.type) === "vendor"; }).length;
+      const rows = tickets.map(function (t, i) {
+        const sev = severityClass(t.severity);
+        const age = ageClass(t.daysOpen);
+        const kind = typeClass(t.type);
+        return (
+          "<tr>" +
+            '<td class="num">' + (i + 1) + '<span class="x" aria-hidden="true">×</span></td>' +
+            "<td>" + escapeHtml(t.title) + "</td>" +
+            '<td class="sev"><span class="pill ' + sev + '">' + escapeHtml(t.severity || "—") + "</span></td>" +
+            '<td class="created">' + escapeHtml(createdLabel(t)) + "</td>" +
+            '<td class="days"><span class="pill ' + age + '">' + escapeHtml(daysLabel(t)) + "</span></td>" +
+            '<td class="type"><span class="pill ' + kind + '">' + escapeHtml(t.type || "—") + "</span></td>" +
+          "</tr>"
+        );
+      }).join("");
+
+      const table = tickets.length
+        ? '<div class="table-wrap"><table><thead><tr>' +
+            "<th class=\"num\">#</th><th>Title</th><th class=\"sev\">Severity</th>" +
+            "<th class=\"created\">Created</th><th class=\"days\">Days Open</th><th class=\"type\">Type</th>" +
+          "</tr></thead><tbody>" + rows + "</tbody></table></div>"
+        : '<p class="empty">No open tickets in the sheet.</p>';
+
+      document.getElementById("board").innerHTML =
+        "<h1>" + tickets.length + " SIM TICKETS</h1>" +
+        '<p class="asof">As of ' + escapeHtml(asOf) + "</p>" +
+        '<div class="stat"><span class="dot rme"></span><span>' + rme + " RME Fixes</span></div>" +
+        '<div class="stat"><span class="dot vendor"></span><span>' + vendor + " Vendor Fixes</span></div>" +
+        '<div class="age-label">Age:</div>' +
+        '<div class="age-row"><span class="swatch green"></span><span>30 days or less</span></div>' +
+        '<div class="age-row"><span class="swatch yellow"></span><span>31-59 days</span></div>' +
+        '<div class="age-row"><span class="swatch red"></span><span>60+ days</span></div>' +
+        table;
+    }
+
+    function setStatus(message, isError) {
+      const el = document.getElementById("status");
+      if (!message) {
+        el.hidden = true;
+        el.textContent = "";
+        el.className = "status";
+        return;
+      }
+      el.hidden = false;
+      el.textContent = message;
+      el.className = isError ? "status error" : "status";
+    }
+
+    function toCsv(tickets) {
+      const lines = [["#", "Title", "Severity", "Created", "Days Open", "Type"].map(escapeCsv).join(",")];
+      tickets.forEach(function (t, i) {
+        lines.push([
+          i + 1,
+          t.title,
+          t.severity,
+          createdLabel(t),
+          daysLabel(t),
+          t.type
+        ].map(escapeCsv).join(","));
+      });
+      return lines.join("\r\n") + "\r\n";
+    }
+
+    function downloadBlob(filename, blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    async function loadTickets() {
+      const button = document.getElementById("refresh");
+      button.disabled = true;
+      const firstLoad = state.tickets.length === 0 && !document.querySelector("#board h1");
+      setStatus(firstLoad ? "Loading tickets…" : "Refreshing…", false);
+      const ctrl = new AbortController();
+      const timer = setTimeout(function () { ctrl.abort(); }, 20000);
+      try {
+        const res = await fetch(SHEET_CSV, { cache: "no-store", signal: ctrl.signal });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+        const trimmed = text.trim();
+        if (!trimmed || /^<!doctype|^<html/i.test(trimmed)) {
+          throw new Error("Sheet did not return CSV");
+        }
+        const today = new Date();
+        const tickets = rowsToTickets(parseCSV(text), today);
+        state.tickets = tickets;
+        state.asOf = formatISODate(today);
+        render(tickets, state.asOf);
+        setStatus("", false);
+      } catch (err) {
+        const timedOut = err && err.name === "AbortError";
+        setStatus(
+          timedOut
+            ? "The ticket sheet took too long to respond. Press Refresh to try again."
+            : "Couldn't load tickets from Google Sheets. Check the connection and press Refresh.",
+          true
+        );
+      } finally {
+        clearTimeout(timer);
+        button.disabled = false;
+      }
+    }
+
+    document.getElementById("refresh").addEventListener("click", loadTickets);
+
+    document.getElementById("download-csv").addEventListener("click", function () {
+      if (!state.tickets.length && !document.querySelector("#board h1")) {
+        setStatus("Nothing to download yet. Wait for the sheet to load, or press Refresh.", true);
+        return;
+      }
+      const csv = toCsv(state.tickets);
+      downloadBlob(
+        "sim-tickets-" + (state.asOf || "export") + ".csv",
+        new Blob([csv], { type: "text/csv;charset=utf-8" })
+      );
+    });
+
+    document.getElementById("download-png").addEventListener("click", async function () {
+      const button = document.getElementById("download-png");
+      const board = document.getElementById("board");
+      if (!board.querySelector("h1")) {
+        setStatus("Nothing to download yet. Wait for the sheet to load, or press Refresh.", true);
+        return;
+      }
+      if (typeof html2canvas !== "function") {
+        setStatus("PNG export isn't available because the capture library didn't load. Try again in a moment.", true);
+        return;
+      }
+      button.disabled = true;
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const canvas = await html2canvas(board, {
+          backgroundColor: "#252526",
+          scale: 2,
+          useCORS: true
+        });
+        const blob = await new Promise(function (resolve) { canvas.toBlob(resolve, "image/png"); });
+        if (!blob) throw new Error("empty png");
+        downloadBlob("sim-tickets-" + (state.asOf || "export") + ".png", blob);
+      } catch (err) {
+        setStatus("Couldn't create the PNG. Press Download PNG to try again.", true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    window.ticketBoard = {
+      parseCSV: parseCSV,
+      parseCreated: parseCreated,
+      parseDays: parseDays,
+      rowsToTickets: rowsToTickets,
+      daysBetween: daysBetween,
+      toCsv: toCsv,
+      severityClass: severityClass,
+      ageClass: ageClass,
+      loadTickets: loadTickets
+    };
+
+    loadTickets();
+  </script>
+</body>
+</html>
