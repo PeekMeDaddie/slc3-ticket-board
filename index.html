@@ -555,7 +555,7 @@
       const ctrl = new AbortController();
       const timer = setTimeout(function () { ctrl.abort(); }, 20000);
       try {
-        const res = await fetch(SHEET_CSV, { cache: "no-store", signal: ctrl.signal });
+        const res = await fetch(SHEET_CSV + "&cb=" + Date.now(), { cache: "no-store", signal: ctrl.signal });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const text = await res.text();
         const trimmed = text.trim();
