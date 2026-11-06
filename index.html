@@ -233,7 +233,11 @@
   <noscript>This dashboard needs JavaScript to load tickets from Google Sheets.</noscript>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script>
-    const SHEET_CSV = "https://docs.google.com/spreadsheets/d/1kvsV3ZFlnPIuvfLm5mzaZ075P8FxsYYxiP4vI37muYg/gviz/tq?tqx=out:csv&sheet=Tracker&range=A12:F212";
+    // Whole A:F columns, not a fixed row window. Summary rows above the header
+    // can move, and the public CSV joins frozen rows into one label line
+    // ("21 SIM TICKETS #", "Age (days open): Title"). The header is found by
+    // those labels. Columns stay #, Title, Severity, Created, Days Open, Type.
+    const SHEET_CSV = "https://docs.google.com/spreadsheets/d/1kvsV3ZFlnPIuvfLm5mzaZ075P8FxsYYxiP4vI37muYg/gviz/tq?tqx=out:csv&sheet=Tracker&range=A:F";
     const MONTHS = {
       jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
       jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
@@ -354,37 +358,75 @@
       return y + "-" + m + "-" + day;
     }
 
+    function normalizeHeaderCell(value) {
+      return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    // Exact label, or that label as the tail of a frozen-row header cell.
+    function cellHasLabel(value, labels) {
+      const text = normalizeHeaderCell(value);
+      if (!text) return false;
+      const ordered = labels.slice().sort(function (a, b) { return b.length - a.length; });
+      for (let i = 0; i < ordered.length; i++) {
+        const label = ordered[i];
+        if (text === label || text.endsWith(" " + label)) return true;
+      }
+      return false;
+    }
+
     function headerIndex(header, names) {
       for (let i = 0; i < header.length; i++) {
-        if (names.indexOf(header[i]) !== -1) return i;
+        if (cellHasLabel(header[i], names)) return i;
       }
       return -1;
     }
 
-    function rowsToTickets(rows, today) {
-      if (!rows.length) return [];
-      const header = rows[0].map(function (h) {
-        return String(h || "").trim().toLowerCase().replace(/\s+/g, " ");
-      });
-      const idx = {
+    function findHeaderRow(rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] || [];
+        if (headerIndex(row, ["#"]) !== -1 && headerIndex(row, ["title"]) !== -1) return i;
+      }
+      return -1;
+    }
+
+    function columnIndexes(header) {
+      return {
         title: headerIndex(header, ["title"]),
         severity: headerIndex(header, ["severity"]),
         created: headerIndex(header, ["created", "date created", "created date"]),
         days: headerIndex(header, ["days open", "days"]),
         type: headerIndex(header, ["type"])
       };
-      let start = 1;
-      if (idx.title === -1) {
-        idx.title = 1;
-        idx.severity = idx.severity === -1 ? 2 : idx.severity;
-        idx.created = idx.created === -1 ? 3 : idx.created;
-        idx.days = idx.days === -1 ? 4 : idx.days;
-        idx.type = idx.type === -1 ? 5 : idx.type;
-        start = 0;
+    }
+
+    function rowsToTickets(rows, today) {
+      if (!rows.length) return [];
+      const headerAt = findHeaderRow(rows);
+      let idx;
+      let start;
+      if (headerAt !== -1) {
+        idx = columnIndexes(rows[headerAt]);
+        if (idx.severity === -1) idx.severity = 2;
+        if (idx.created === -1) idx.created = 3;
+        if (idx.days === -1) idx.days = 4;
+        if (idx.type === -1) idx.type = 5;
+        start = headerAt + 1;
+      } else {
+        idx = columnIndexes(rows[0]);
+        start = 1;
+        if (idx.title === -1) {
+          idx.title = 1;
+          idx.severity = idx.severity === -1 ? 2 : idx.severity;
+          idx.created = idx.created === -1 ? 3 : idx.created;
+          idx.days = idx.days === -1 ? 4 : idx.days;
+          idx.type = idx.type === -1 ? 5 : idx.type;
+          start = 0;
+        }
       }
       const tickets = [];
       for (let i = start; i < rows.length; i++) {
         const r = rows[i];
+        if (headerIndex(r, ["#"]) !== -1 && headerIndex(r, ["title"]) !== -1) continue;
         const title = String(r[idx.title] == null ? "" : r[idx.title]).trim();
         if (!title) continue;
         const createdRaw = String(r[idx.created] == null ? "" : r[idx.created]).trim();
@@ -630,6 +672,7 @@
       parseCreated: parseCreated,
       parseDays: parseDays,
       rowsToTickets: rowsToTickets,
+      findHeaderRow: findHeaderRow,
       daysBetween: daysBetween,
       toCsv: toCsv,
       severityClass: severityClass,
